@@ -5,25 +5,51 @@
 <title>Kaizo Mario</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#000;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;font-family:'Courier New',monospace}
-#wrap{display:flex;flex-direction:column;align-items:center;padding:6px 0;width:100%}
+body{background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Courier New',monospace;overflow:hidden}
+#wrap{display:flex;flex-direction:column;align-items:center;width:100vw;height:100vh;padding:0;justify-content:center;}
 #hud{width:640px;max-width:100%;background:#111;border:2px solid #333;display:flex;justify-content:space-between;align-items:center;padding:5px 14px;color:#fff;font-size:13px;font-weight:bold;letter-spacing:1px}
 #hud span{color:#ffdd00}
-canvas{border:3px solid #444;display:block;max-width:100%}
-#overlay{position:relative;width:640px;max-width:100%}
-#screen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none;gap:8px}
-#bigMsg{font-size:28px;font-weight:900;color:#ff4444;text-shadow:0 0 20px #ff0000;letter-spacing:3px;text-align:center;padding:0 10px}
-#subMsg{font-size:14px;color:#ffaa00;letter-spacing:2px;text-align:center;padding:0 10px}
-#restartBtn{pointer-events:all;padding:10px 36px;background:#000;color:#ff4444;border:2px solid #ff4444;font-size:15px;font-weight:bold;cursor:pointer;letter-spacing:2px;margin-top:4px;font-family:'Courier New',monospace}
-#restartBtn:hover{background:#ff4444;color:#000}
+canvas{display:block;border:3px solid #444;}
+#overlay{position:relative;display:flex;justify-content:center;align-items:center;}
+#screen{position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none;gap:12px;z-index:100;}
+#bigMsg{font-size:48px;font-weight:900;color:#ff4444;text-shadow:0 0 30px #ff0000,0 0 60px #ff000088;letter-spacing:5px;text-align:center;padding:0 20px;font-family:'Courier New',monospace;}
+#subMsg{font-size:18px;color:#ffaa00;letter-spacing:3px;text-align:center;padding:0 20px;text-shadow:0 0 10px #ff880088;}
+#restartBtn{pointer-events:all;padding:14px 48px;background:#000;color:#ff4444;border:2px solid #ff4444;font-size:18px;font-weight:bold;cursor:pointer;letter-spacing:3px;margin-top:8px;font-family:'Courier New',monospace;text-shadow:0 0 10px #ff4444;}
+#restartBtn:hover{background:#ff4444;color:#000;box-shadow:0 0 20px #ff4444;}
 #controls{color:#555;font-size:11px;margin-top:5px;letter-spacing:1px;text-align:center}
 #touchpad{display:none;width:640px;max-width:100%;background:#111;border-top:1px solid #222;padding:8px;justify-content:space-between;align-items:center}
 @media(max-width:700px){#touchpad{display:flex}}
 .tbtn{background:#222;border:2px solid #444;color:#fff;font-size:20px;width:56px;height:56px;border-radius:8px;cursor:pointer;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:center;font-family:monospace}
 .tbtn:active{background:#444}
 #tBtns{display:flex;gap:8px}
+#rotateMsg{
+  display:none;
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:#000;z-index:9999;
+  flex-direction:column;justify-content:center;align-items:center;
+  color:#fff;font-size:22px;font-weight:bold;letter-spacing:2px;text-align:center;gap:16px;
+}
+#rotateMsg div{font-size:60px;animation:spin 2s linear infinite;}
+@keyframes spin{0%{transform:rotate(0deg)}50%{transform:rotate(90deg)}100%{transform:rotate(90deg)}}
+@media(orientation:portrait){#rotateMsg{display:flex;}}
 </style>
 </head>
+<script>
+function resizeCanvas(){
+  const ratio=640/400;
+  const winW=window.innerWidth;
+  const winH=window.innerHeight;
+  let w=winW,h=winW/ratio;
+  if(h>winH){h=winH;w=winH*ratio;}
+  cv.style.width=w+'px';
+  cv.style.height=h+'px';
+  const overlay=document.getElementById('overlay');
+  overlay.style.width=w+'px';
+  overlay.style.height=h+'px';
+}
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas();
+</script>
 <body>
 <div id="wrap">
 <div id="hud">
@@ -721,4 +747,9 @@ initLevel(0);
 requestAnimationFrame(loop);
 </script>
 </body>
+<div id="rotateMsg">
+  <div>📱</div>
+  ROTATE YOUR PHONE<br>
+  <span style="font-size:13px;color:#888;">Landscape mode required</span>
+</div>
 </html>
