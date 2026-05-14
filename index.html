@@ -6,53 +6,230 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Kaizo World Adventure</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden;}
-#hud{width:100%;background:#111;border-bottom:2px solid #333;display:flex;justify-content:space-between;align-items:center;padding:5px 18px;color:#fff;font-size:11px;font-weight:bold;letter-spacing:1px;flex-shrink:0;}
-#hud span{color:#ffdd00}
-#canvasWrap{position:relative;flex:1 1 auto;display:flex;align-items:center;justify-content:center;width:100%;overflow:hidden;}
-canvas{display:block;image-rendering:pixelated;}
-#screen{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none;gap:10px;z-index:100;}
-#bigMsg{font-family:'Press Start 2P',monospace;font-size:clamp(16px,4vw,28px);color:#fff;text-shadow:4px 4px 0 #ff0000;letter-spacing:3px;text-align:center;padding:0 20px;animation:glitch .4s infinite;}
-#subMsg{font-family:'Press Start 2P',monospace;font-size:clamp(8px,1.5vw,11px);color:#ffdd00;text-shadow:2px 2px 0 #885500;letter-spacing:1px;text-align:center;padding:0 20px;margin-top:6px;}
-#restartBtn,#menuBtn{pointer-events:all;font-family:'Press Start 2P',monospace;padding:10px 28px;background:#000;border:2px solid currentColor;font-size:clamp(8px,1.5vw,11px);cursor:pointer;letter-spacing:2px;transition:all .1s;margin-top:6px;}
-#restartBtn{color:#00ff88;border-color:#00ff88;}#restartBtn:hover{background:#00ff88;color:#000;}
-#menuBtn{color:#ffdd00;border-color:#ffdd00;}#menuBtn:hover{background:#ffdd00;color:#000;}
-@keyframes glitch{0%{text-shadow:4px 4px 0 #f00}50%{text-shadow:-4px 4px 0 #00f}100%{text-shadow:4px 4px 0 #f00}}
-#controls{font-size:9px;color:#333;text-align:center;padding:3px 0;flex-shrink:0;letter-spacing:1px;width:100%;background:#000;}
-#touchpad{display:none;width:100%;background:#111;border-top:1px solid #222;padding:8px 16px;justify-content:space-between;align-items:center;flex-shrink:0;}
+html,body{width:100%;height:100%;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden;font-family:'Orbitron',monospace;}
+
+/* ── HUD ── */
+#hud{
+  width:100%;flex-shrink:0;
+  background:linear-gradient(180deg,#1a1a2e 0%,#0f0f1a 100%);
+  border-bottom:2px solid #ffffff11;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:6px 20px;gap:8px;
+  box-shadow:0 2px 20px #00000088;
+}
+.hud-logo{
+  font-family:'Press Start 2P',monospace;font-size:10px;
+  background:linear-gradient(90deg,#ff6600,#ffdd00,#ff6600);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  letter-spacing:2px;filter:drop-shadow(0 0 6px #ff660088);
+  white-space:nowrap;
+}
+.hud-pill{
+  display:flex;align-items:center;gap:6px;
+  background:#ffffff08;border:1px solid #ffffff15;
+  border-radius:20px;padding:4px 12px;
+  font-size:10px;color:#aaa;letter-spacing:1px;
+  white-space:nowrap;
+}
+.hud-pill .val{
+  font-family:'Press Start 2P',monospace;font-size:9px;
+  color:#fff;letter-spacing:0;
+}
+.hud-pill .icon{font-size:13px;line-height:1;}
+#timerPill .val{color:#ffdd00;}
+#timerPill.urgent .val{color:#ff4444;animation:pulse .4s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── CANVAS ── */
+#canvasWrap{
+  position:relative;flex:1 1 auto;
+  display:flex;align-items:center;justify-content:center;
+  width:100%;overflow:hidden;
+  background:#000;
+}
+canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;}
+
+/* ── OVERLAY (death / win panels) ── */
+#overlay{
+  position:fixed;inset:0;z-index:200;
+  display:none;flex-direction:column;justify-content:center;align-items:center;gap:0;
+  background:rgba(0,0,0,0);
+  transition:background .3s;
+  pointer-events:none;
+}
+#overlay.show{display:flex;background:rgba(0,0,0,0.72);pointer-events:all;}
+#overlayPanel{
+  background:linear-gradient(160deg,#0d0d1f,#1a0808);
+  border:2px solid #ff333355;
+  border-radius:4px;
+  padding:36px 52px;
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+  box-shadow:0 0 60px #ff000033, inset 0 0 40px #00000088;
+  min-width:320px;max-width:90vw;
+  position:relative;overflow:hidden;
+}
+#overlayPanel::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,0.012) 3px,rgba(255,255,255,0.012) 4px);
+  pointer-events:none;
+}
+#overlayPanel.win{
+  background:linear-gradient(160deg,#001a0d,#0d1a00);
+  border-color:#00ff8855;
+  box-shadow:0 0 60px #00ff0022, inset 0 0 40px #00000088;
+}
+#bigMsg{
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(18px,3.5vw,32px);
+  color:#fff;letter-spacing:3px;text-align:center;
+  text-shadow:0 0 20px currentColor;
+  animation:glitch .35s infinite;
+}
+#bigMsg.win-msg{color:#00ff88;animation:glow 1s infinite alternate;}
+@keyframes glow{from{text-shadow:0 0 10px #00ff88}to{text-shadow:0 0 30px #00ff88,0 0 60px #00ff8844}}
+@keyframes glitch{
+  0%  {text-shadow:3px 0 #f00,-3px 0 #00f}
+  25% {text-shadow:-3px 0 #f00, 3px 0 #00f}
+  50% {text-shadow:3px 0 #f0f,-3px 0 #0ff}
+  75% {text-shadow:-2px 0 #f00, 2px 0 #00f}
+  100%{text-shadow:3px 0 #f00,-3px 0 #00f}
+}
+#subMsg{
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(8px,1.4vw,11px);
+  color:#ffdd00;letter-spacing:2px;text-align:center;
+  opacity:.85;
+}
+.ovl-stats{
+  display:flex;gap:24px;margin:4px 0;
+}
+.ovl-stat{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-size:9px;color:#555;letter-spacing:1px;
+}
+.ovl-stat span{
+  font-family:'Press Start 2P',monospace;font-size:13px;color:#fff;
+}
+.ovl-divider{width:100%;height:1px;background:linear-gradient(90deg,transparent,#ffffff22,transparent);}
+.ovl-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+.ovl-btn{
+  font-family:'Press Start 2P',monospace;
+  padding:12px 28px;font-size:clamp(8px,1.3vw,10px);
+  cursor:pointer;letter-spacing:2px;
+  border-radius:2px;transition:all .15s;
+  border:2px solid currentColor;background:transparent;
+  position:relative;overflow:hidden;
+}
+.ovl-btn::before{
+  content:'';position:absolute;inset:0;
+  background:currentColor;opacity:0;transition:opacity .15s;
+}
+.ovl-btn:hover::before{opacity:.15;}
+.ovl-btn:active{transform:scale(.97);}
+.btn-retry{color:#00ff88;}
+.btn-menu {color:#ffdd00;}
+
+/* ── CONTROLS BAR ── */
+#controls{
+  font-family:'Orbitron',monospace;
+  font-size:9px;color:#2a2a3a;letter-spacing:2px;
+  text-align:center;padding:4px 0;flex-shrink:0;
+  width:100%;background:#000;
+}
+
+/* ── TOUCH BUTTONS ── */
+#touchpad{
+  display:none;width:100%;
+  background:linear-gradient(180deg,#0f0f1a,#080810);
+  border-top:1px solid #ffffff0a;
+  padding:10px 20px;
+  justify-content:space-between;align-items:center;flex-shrink:0;
+}
 @media(max-width:700px),(pointer:coarse){#touchpad{display:flex}#controls{display:none}}
-.tbtn{background:#1a1a1a;border:2px solid #444;color:#fff;font-size:22px;width:60px;height:60px;border-radius:10px;cursor:pointer;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:center;touch-action:none;}
-.tbtn:active,.tbtn.pressed{background:#333;border-color:#888;}
-#rotateMask{display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column;justify-content:center;align-items:center;color:#fff;font-size:18px;font-weight:bold;text-align:center;gap:12px;}
+.tbtn{
+  background:linear-gradient(160deg,#1e1e30,#12121e);
+  border:2px solid #ffffff1a;color:#fff;
+  font-size:22px;width:64px;height:64px;
+  border-radius:14px;cursor:pointer;
+  user-select:none;-webkit-user-select:none;
+  display:flex;align-items:center;justify-content:center;
+  touch-action:none;
+  box-shadow:0 4px 12px #00000066, inset 0 1px 0 #ffffff18;
+  transition:all .08s;
+}
+.tbtn:active,.tbtn.pressed{
+  background:linear-gradient(160deg,#2a2a44,#1a1a2e);
+  border-color:#ffffff33;
+  box-shadow:0 2px 6px #00000066, inset 0 0 8px #ffffff08;
+  transform:translateY(2px);
+}
+#tJ{width:90px;font-size:13px;font-family:'Press Start 2P',monospace;color:#00ff88;border-color:#00ff8833;letter-spacing:1px;}
+#tJ.pressed{color:#fff;background:linear-gradient(160deg,#004422,#002211);}
+
+/* ── ROTATE MASK ── */
+#rotateMask{
+  display:none;position:fixed;inset:0;
+  background:linear-gradient(135deg,#000010,#100000);
+  z-index:9999;flex-direction:column;justify-content:center;align-items:center;
+  color:#fff;font-size:18px;font-weight:bold;text-align:center;gap:16px;
+}
 @media(orientation:portrait) and (max-width:500px){#rotateMask{display:flex}}
 </style>
 </head>
 <body>
+
+<!-- HUD -->
 <div id="hud">
-  <div style="font-family:'Press Start 2P',monospace;font-size:7px">KAIZO☆</div>
-  <div>WORLD:<span id="hW">--</span></div>
-  <div>LV:<span id="hLv">-</span></div>
-  <div>DEATHS:<span id="hD">0</span></div>
-  <div>COINS:<span id="hC">0</span></div>
-  <div>TIME:<span id="hT">---</span></div>
+  <div class="hud-logo">KAIZO ★</div>
+  <div class="hud-pill">🌍 <span class="val" id="hW">SELECT</span></div>
+  <div class="hud-pill">📍 LV <span class="val" id="hLv">-</span></div>
+  <div class="hud-pill">💀 <span class="val" id="hD">0</span></div>
+  <div class="hud-pill">🪙 <span class="val" id="hC">0</span></div>
+  <div class="hud-pill" id="timerPill">⏱ <span class="val" id="hT">---</span></div>
 </div>
+
+<!-- CANVAS -->
 <div id="canvasWrap"><canvas id="c" width="640" height="400"></canvas></div>
-<div id="controls">← → MOVE &nbsp;|&nbsp; Z / SPACE / ↑ JUMP &nbsp;|&nbsp; R = RESTART &nbsp;|&nbsp; ESC = WORLDS</div>
+
+<!-- KEYBOARD HINT -->
+<div id="controls">← → MOVE &nbsp;·&nbsp; Z / SPACE / ↑ JUMP &nbsp;·&nbsp; R RESTART &nbsp;·&nbsp; ESC WORLDS</div>
+
+<!-- TOUCH CONTROLS -->
 <div id="touchpad">
   <div style="display:flex;gap:10px">
     <div class="tbtn" id="tL">◀</div>
     <div class="tbtn" id="tR">▶</div>
   </div>
-  <div class="tbtn" id="tJ" style="width:80px">JUMP</div>
+  <div class="tbtn" id="tJ">JUMP</div>
 </div>
-<div id="screen">
-  <div id="bigMsg"></div>
-  <div id="subMsg"></div>
-  <button id="restartBtn" style="display:none" onclick="onRestart()">▶ TRY AGAIN</button>
-  <button id="menuBtn" style="display:none" onclick="goWorldSelect()">⌂ WORLDS</button>
+
+<!-- DEATH / WIN OVERLAY -->
+<div id="overlay">
+  <div id="overlayPanel">
+    <div id="bigMsg"></div>
+    <div id="subMsg"></div>
+    <div class="ovl-divider"></div>
+    <div class="ovl-stats">
+      <div class="ovl-stat">DEATHS<span id="ovDeath">0</span></div>
+      <div class="ovl-stat">COINS<span id="ovCoins">0</span></div>
+    </div>
+    <div class="ovl-divider"></div>
+    <div class="ovl-btns">
+      <button class="ovl-btn btn-retry" id="restartBtn" onclick="onRestart()">▶ TRY AGAIN</button>
+      <button class="ovl-btn btn-menu"  id="menuBtn"   onclick="goWorldSelect()">⌂ WORLDS</button>
+    </div>
+  </div>
 </div>
-<div id="rotateMask"><div style="font-size:50px">📱</div>ROTATE YOUR PHONE<br><span style="font-size:12px;color:#666">Landscape mode required</span></div>
+
+<!-- ROTATE PROMPT -->
+<div id="rotateMask">
+  <div style="font-size:52px;animation:spin 2s ease-in-out infinite">📱</div>
+  <div style="font-family:'Press Start 2P',monospace;font-size:12px;color:#888">ROTATE YOUR PHONE</div>
+  <div style="font-size:11px;color:#444">Landscape mode required</div>
+</div>
+<style>@keyframes spin{0%{transform:rotate(0)}50%{transform:rotate(90deg)}100%{transform:rotate(90deg)}}</style>
 <script>
 // ── CANVAS RESPONSIVE ────────────────────────────────────────
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');
@@ -104,6 +281,7 @@ let tL=false,tR=false,tJump=false,tJumpFresh=false;
 
 const K={};let jumpFresh=false;
 document.addEventListener('keydown',e=>{
+  resumeAudio();
   if(K[e.key])return;
   K[e.key]=true;
   if(['ArrowLeft','ArrowRight','ArrowUp',' ','z','Z','r','R','Escape'].includes(e.key))e.preventDefault();
@@ -537,14 +715,68 @@ let lvlIdx=0, LV, player, movPlats, coinSt, invSt, enSt;
 let curWorld=null;
 const MAXFALL=14, SPD=3.2;
 
-// HUD refs
+// ── HUD REFS ─────────────────────────────────────────────────
 const hLv=document.getElementById('hLv'),hD=document.getElementById('hD');
 const hC=document.getElementById('hC'),hT=document.getElementById('hT'),hW=document.getElementById('hW');
 const bigMsg=document.getElementById('bigMsg'),subMsg=document.getElementById('subMsg');
-const restartBtn=document.getElementById('restartBtn'),menuBtn=document.getElementById('menuBtn');
+const ovDeath=document.getElementById('ovDeath'),ovCoins=document.getElementById('ovCoins');
+const overlay=document.getElementById('overlay'),overlayPanel=document.getElementById('overlayPanel');
+const timerPill=document.getElementById('timerPill');
+
+// ── SCREEN SHAKE ─────────────────────────────────────────────
+let shakeFrames=0, shakeMag=0;
+function triggerShake(mag=8,dur=12){ shakeMag=mag; shakeFrames=dur; }
+function applyShake(){
+  if(shakeFrames>0){
+    const dx=(Math.random()-.5)*shakeMag;
+    const dy=(Math.random()-.5)*shakeMag;
+    ctx.save(); ctx.translate(dx,dy);
+    shakeFrames--; shakeMag*=0.85;
+    return true;
+  }
+  return false;
+}
+
+// ── SCREEN FLASH ─────────────────────────────────────────────
+let flashAlpha=0, flashColor='#fff';
+function triggerFlash(col='#fff',alpha=0.55){ flashColor=col; flashAlpha=alpha; }
+function drawFlash(){
+  if(flashAlpha>0.01){
+    ctx.fillStyle=flashColor;
+    ctx.globalAlpha=flashAlpha;
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha=1;
+    flashAlpha*=0.72;
+  }
+}
+
+// ── WEB AUDIO SOUNDS ─────────────────────────────────────────
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function beep(freq,type,dur,vol=0.18,detune=0){
+  try{
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.connect(g);g.connect(AC.destination);
+    o.type=type; o.frequency.value=freq;
+    if(detune)o.detune.value=detune;
+    g.gain.setValueAtTime(vol,AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+    o.start(); o.stop(AC.currentTime+dur);
+  }catch(e){}
+}
+function sndJump(){ beep(320,'square',0.12,0.12); beep(480,'square',0.09,0.07); }
+function sndCoin(){ beep(880,'sine',0.1,0.15); beep(1200,'sine',0.08,0.12); }
+function sndDie(){
+  beep(220,'sawtooth',0.08,0.2);
+  setTimeout(()=>beep(160,'sawtooth',0.15,0.22),80);
+  setTimeout(()=>beep(110,'sawtooth',0.22,0.25),180);
+}
+function sndStomp(){ beep(600,'square',0.07,0.18); beep(400,'square',0.1,0.14); }
+function sndClear(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,'sine',0.2,0.2),i*100)); }
+function resumeAudio(){ if(AC.state==='suspended')AC.resume(); }
 
 // ── INIT LEVEL ───────────────────────────────────────────────
 function initLevel(i){
+  resumeAudio();
   lvlIdx=i;
   LV=LEVELS[i];
   curWorld=WORLDS.find(w=>i>=w.lr[0]&&i<=w.lr[1]);
@@ -552,6 +784,10 @@ function initLevel(i){
   hW.textContent=curWorld.name;
   hLv.textContent=(i-curWorld.lr[0])+1;
   hT.textContent=300;
+  timerPill.classList.remove('urgent');
+
+  // Update HUD accent colour to match world
+  document.getElementById('hud').style.borderBottomColor=curWorld.color+'44';
 
   player={
     x:LV.ps.x, y:LV.ps.y,
@@ -559,7 +795,7 @@ function initLevel(i){
     w:18, h:22,
     onGround:false,
     jumpHeld:false,
-    jumpFrames:0,       // counts how many frames jump-hold has been applied
+    jumpFrames:0,
     dead:false,
     deadTimer:0
   };
@@ -571,32 +807,31 @@ function initLevel(i){
   enSt     = (LV.en||[]).map(e=>({...e,alive:true}));
 
   gameState='playing';
-  bigMsg.textContent='';
-  subMsg.textContent='';
-  restartBtn.style.display='none';
-  menuBtn.style.display='none';
-  jumpFresh=false;
-  tJumpFresh=false;
-  K._jdown=false;
+  overlay.classList.remove('show');
+  jumpFresh=false; tJumpFresh=false; K._jdown=false;
 }
 
 // ── WORLD SELECT / RESTART ───────────────────────────────────
 function goWorldSelect(){
   gameState='worldSelect';
-  bigMsg.textContent='';
-  subMsg.textContent='';
-  restartBtn.style.display='none';
-  menuBtn.style.display='none';
-  hW.textContent='--';
-  hLv.textContent='-';
-  hT.textContent='---';
+  overlay.classList.remove('show');
+  hW.textContent='SELECT'; hLv.textContent='-'; hT.textContent='---';
+  timerPill.classList.remove('urgent');
+  document.getElementById('hud').style.borderBottomColor='';
 }
 
 function onRestart(){ initLevel(lvlIdx); }
+function startWorld(wi){ curWorld=WORLDS[wi]; initLevel(curWorld.lr[0]); }
 
-function startWorld(wi){
-  curWorld=WORLDS[wi];
-  initLevel(curWorld.lr[0]);
+// ── SHOW OVERLAY ─────────────────────────────────────────────
+function showOverlay(title, sub, isWin){
+  bigMsg.textContent=title;
+  bigMsg.className=isWin?'win-msg':'';
+  subMsg.textContent=sub;
+  ovDeath.textContent=deaths;
+  ovCoins.textContent=totalCoins;
+  overlayPanel.className=isWin?'win':'';
+  overlay.classList.add('show');
 }
 
 // ── HELPERS ──────────────────────────────────────────────────
@@ -652,8 +887,10 @@ function updEnemies(){
         if(player.vy>0 && player.y+player.h < e.y+12){
           e.alive=false;
           player.vy=-7;
-          spawnP(e.x+9,e.y+10,'#c84000',8);
+          spawnP(e.x+9,e.y+10,'#ffaa44',10);
           totalCoins++; hC.textContent=totalCoins;
+          sndStomp();
+          triggerFlash('#ffffff',0.18);
         } else {
           die();
         }
@@ -669,9 +906,12 @@ function die(){
   player.deadTimer=60;
   player.vy=-9;
   player.vx=(Math.random()-.5)*3;
-  spawnP(player.x+9,player.y+11,'#ff4444',14);
-  deaths++;
-  hD.textContent=deaths;
+  spawnP(player.x+9,player.y+11,'#ff4444',18);
+  spawnP(player.x+9,player.y+11,'#ff8800',10);
+  deaths++; hD.textContent=deaths;
+  sndDie();
+  triggerShake(10,16);
+  triggerFlash('#ff0000',0.45);
 }
 
 // ── PLAYER UPDATE ────────────────────────────────────────────
@@ -697,10 +937,7 @@ function updPlayer(){
         ['DONT GIVE UP','Deaths: '+deaths],
       ];
       const m=msgs[Math.min(Math.floor(deaths/2), msgs.length-1)];
-      bigMsg.textContent=m[0];
-      subMsg.textContent=m[1];
-      restartBtn.style.display='inline-block';
-      menuBtn.style.display='inline-block';
+      showOverlay(m[0], m[1], false);
       gameState='dead';
     }
     return;
@@ -708,7 +945,11 @@ function updPlayer(){
 
   // ─ Timer ─
   timerTick++;
-  if(timerTick>=60){ timerTick=0; timer--; hT.textContent=timer; if(timer<=0) die(); }
+  if(timerTick>=60){
+    timerTick=0; timer--; hT.textContent=timer;
+    if(timer<=10) timerPill.classList.add('urgent');
+    if(timer<=0) die();
+  }
 
   // ─ Read input ─
   const holdingJump = K['ArrowUp']||K[' ']||K['z']||K['Z']||tJump;
@@ -725,6 +966,7 @@ function updPlayer(){
     player.vy=LV.jf;
     player.jumpHeld=true;
     player.jumpFrames=0;
+    sndJump();
   }
 
   // ─ Jump HOLD boost — LIMITED to MAX_JUMP_FRAMES ─
@@ -814,23 +1056,24 @@ function updPlayer(){
   (LV.co||[]).forEach((c,i)=>{
     if(!coinSt[i] && overlap(player.x,player.y,player.w,player.h, c.x-8,c.y-8,16,16)){
       coinSt[i]=true;
-      totalCoins++;
-      hC.textContent=totalCoins;
-      spawnP(c.x,c.y,'#FFD700',5);
+      totalCoins++; hC.textContent=totalCoins;
+      spawnP(c.x,c.y,'#FFD700',7);
+      sndCoin();
     }
   });
 
   // ─ Goal flag ─
   if(overlap(player.x,player.y,player.w,player.h, LV.gx,LV.gy,30,H-LV.gy)){
     if(lvlIdx<curWorld.lr[1]){
-      bigMsg.textContent='LEVEL CLEAR!';
-      subMsg.textContent='Get ready for level '+(( lvlIdx-curWorld.lr[0])+2)+'!';
+      sndClear();
+      triggerFlash('#00ff88',0.35);
+      showOverlay('LEVEL CLEAR!','Get ready for level '+((lvlIdx-curWorld.lr[0])+2)+'!',true);
       gameState='win';
-      setTimeout(()=>initLevel(lvlIdx+1), 2000);
+      setTimeout(()=>initLevel(lvlIdx+1), 2200);
     } else {
-      bigMsg.textContent=curWorld.name+' CLEAR!';
-      subMsg.textContent='Amazing! Deaths: '+deaths;
-      menuBtn.style.display='inline-block';
+      sndClear(); sndClear();
+      triggerFlash('#FFD700',0.5);
+      showOverlay(curWorld.name+' CLEAR!','You legend! Deaths: '+deaths,true);
       gameState='worldClear';
     }
   }
@@ -841,114 +1084,223 @@ function updPlayer(){
 
 // ── WORLD SELECT SCREEN ──────────────────────────────────────
 const CARDS=[
-  {x:30, y:62, w:272,h:148,wi:0},
-  {x:338,y:62, w:272,h:148,wi:1},
-  {x:30, y:226,w:272,h:148,wi:2},
-  {x:338,y:226,w:272,h:148,wi:3},
+  {x:30, y:68, w:272,h:144,wi:0},
+  {x:338,y:68, w:272,h:144,wi:1},
+  {x:30, y:228,w:272,h:144,wi:2},
+  {x:338,y:228,w:272,h:144,wi:3},
 ];
 
 function drawWorldSelect(){
-  // Background
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#000018'); g.addColorStop(1,'#000028');
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // Deep space background
+  ctx.fillStyle='#00001a'; ctx.fillRect(0,0,W,H);
 
-  // Twinkling stars
-  for(let i=0;i<80;i++){
+  // Animated star field
+  for(let i=0;i<120;i++){
     const sx=(i*139+50)%W, sy=(i*97+20)%H;
-    const blink=Math.sin(frame*0.05+i)>0.5;
-    ctx.fillStyle=blink?'rgba(255,255,255,0.9)':'rgba(180,180,255,0.2)';
-    ctx.fillRect(sx,sy,blink?2:1,blink?2:1);
+    const b=Math.sin(frame*0.04+i*0.7)>0.3;
+    const size=b?2:1;
+    const brightness=b?0.9:0.2+(i%5)*0.06;
+    ctx.fillStyle=`rgba(${180+i%70},${180+i%50},255,${brightness})`;
+    ctx.fillRect(sx,sy,size,size);
   }
 
-  // Title
-  ctx.textAlign='center';
-  const tg=ctx.createLinearGradient(0,0,W,0);
-  tg.addColorStop(0,'#ff4400');
-  tg.addColorStop(0.5,'#ffdd00');
-  tg.addColorStop(1,'#ff4400');
-  ctx.fillStyle=tg;
-  ctx.font='18px "Press Start 2P"';
-  ctx.shadowColor='#ff8800'; ctx.shadowBlur=14;
-  ctx.fillText('KAIZO WORLD',W/2,34);
-  ctx.shadowBlur=0;
-  ctx.fillStyle='#444';
-  ctx.font='7px "Press Start 2P"';
-  ctx.fillText('CHOOSE YOUR ADVENTURE',W/2,50);
+  // Shooting star
+  const ss=Math.floor(frame/80)%4;
+  const ssp=(frame%80)/80;
+  const sx1=ss*180+ssp*200, sy1=30+ss*60;
+  ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(sx1,sy1); ctx.lineTo(sx1-40*ssp,sy1-15*ssp); ctx.stroke();
 
-  // Draw each world card
+  // Title with animated gradient
+  ctx.save();
+  const tg=ctx.createLinearGradient(0,0,W,0);
+  const tp=((frame*0.008)%1);
+  tg.addColorStop(Math.max(0,tp-.3),'#ff6600');
+  tg.addColorStop(tp,           '#ffdd00');
+  tg.addColorStop(Math.min(1,tp+.3),'#ff6600');
+  ctx.fillStyle=tg;
+  ctx.font='bold 20px "Press Start 2P"';
+  ctx.textAlign='center';
+  ctx.shadowColor='#ff8800'; ctx.shadowBlur=18;
+  ctx.fillText('KAIZO WORLD',W/2,36);
+  ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(255,255,255,0.2)';
+  ctx.font='7px "Press Start 2P"';
+  ctx.fillText('— CHOOSE YOUR WORLD —',W/2,52);
+  ctx.restore();
+
+  // Cards
   for(const card of CARDS){
     const wm=WORLDS[card.wi];
     const hov=mouseX>=card.x&&mouseX<=card.x+card.w&&mouseY>=card.y&&mouseY<=card.y+card.h;
+    const pulse=Math.sin(frame*0.05+card.wi*1.2)*0.5+0.5;
 
-    // Card background
-    ctx.fillStyle=hov ? wm.dark : '#070707';
-    ctx.fillRect(card.x,card.y,card.w,card.h);
+    // Card shadow
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(card.x+4,card.y+4,card.w,card.h);
 
-    // Glowing border on hover
-    ctx.lineWidth=hov?2.5:1;
-    ctx.strokeStyle=hov?wm.color:'#222';
-    if(hov){ ctx.shadowColor=wm.color; ctx.shadowBlur=14; }
+    // Card background with gradient
+    const cg=ctx.createLinearGradient(card.x,card.y,card.x,card.y+card.h);
+    cg.addColorStop(0,hov ? wm.dark+'ff' : '#0d0d18');
+    cg.addColorStop(1,hov ? '#000000' : '#06060d');
+    ctx.fillStyle=cg; ctx.fillRect(card.x,card.y,card.w,card.h);
+
+    // Animated world-colour inner glow on hover
+    if(hov){
+      const ig=ctx.createRadialGradient(card.x+card.w/2,card.y+card.h,0,card.x+card.w/2,card.y+card.h/2,card.w*.6);
+      ig.addColorStop(0,wm.color+'18');
+      ig.addColorStop(1,'transparent');
+      ctx.fillStyle=ig; ctx.fillRect(card.x,card.y,card.w,card.h);
+    }
+
+    // Top bar
+    const barH=4;
+    const bg=ctx.createLinearGradient(card.x,card.y,card.x+card.w,card.y);
+    bg.addColorStop(0,wm.color);
+    bg.addColorStop(0.5,wm.color+'cc');
+    bg.addColorStop(1,wm.color+'55');
+    ctx.fillStyle=bg; ctx.fillRect(card.x,card.y,card.w,barH);
+
+    // Border
+    ctx.lineWidth=hov?2:1;
+    ctx.strokeStyle=hov ? wm.color : wm.color+'33';
+    if(hov){ ctx.shadowColor=wm.color; ctx.shadowBlur=hov?12:0; }
     ctx.strokeRect(card.x,card.y,card.w,card.h);
     ctx.shadowBlur=0;
 
-    // Top colour strip
-    ctx.fillStyle=wm.color+'22';
-    ctx.fillRect(card.x,card.y,card.w,24);
-    ctx.fillStyle=wm.color;
-    ctx.fillRect(card.x,card.y,card.w,3);
+    // Mini animated scene in top-right corner of card
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(card.x+card.w-84,card.y+barH,80,60);
+    ctx.clip();
+    drawMiniScene(card.x+card.w-84,card.y+barH,80,60,wm.id);
+    ctx.restore();
 
-    // Emoji
-    ctx.font='24px serif'; ctx.textAlign='left';
-    ctx.fillText(wm.emoji, card.x+10, card.y+40);
+    // Emoji + Name
+    ctx.font='20px serif'; ctx.textAlign='left';
+    ctx.fillText(wm.emoji, card.x+10, card.y+36);
 
-    // World name
     ctx.fillStyle=wm.color;
-    ctx.font='9px "Press Start 2P"';
-    ctx.shadowColor=hov?wm.color:'transparent';
-    ctx.shadowBlur=hov?6:0;
-    ctx.fillText(wm.name, card.x+10, card.y+63);
+    ctx.font='bold 9px "Press Start 2P"';
+    ctx.shadowColor=wm.color; ctx.shadowBlur=hov?8:0;
+    ctx.fillText(wm.name, card.x+10, card.y+60);
     ctx.shadowBlur=0;
 
-    // Subtitle
-    ctx.fillStyle='#555';
+    ctx.fillStyle='rgba(160,160,180,0.6)';
     ctx.font='6px "Press Start 2P"';
-    ctx.fillText(wm.sub, card.x+10, card.y+79);
+    ctx.fillText(wm.sub, card.x+10, card.y+76);
 
-    // Level count
-    ctx.fillStyle='#383838';
-    ctx.font='6px "Press Start 2P"';
-    ctx.fillText('2 LEVELS', card.x+10, card.y+95);
-
-    // Difficulty stars
-    ctx.fillStyle='#ffaa00';
-    ctx.font='10px "Press Start 2P"';
-    ctx.fillText(wm.diff, card.x+10, card.y+116);
-
-    // Enter hint
-    if(hov){
-      ctx.fillStyle=wm.color;
-      ctx.font='7px "Press Start 2P"';
-      ctx.textAlign='right';
-      ctx.fillText('▶ PLAY', card.x+card.w-8, card.y+card.h-8);
+    // Difficulty dots
+    const filled=wm.diff.split('★').length-1;
+    for(let d=0;d<4;d++){
+      ctx.fillStyle=d<filled ? wm.color : wm.color+'33';
+      ctx.beginPath();
+      ctx.arc(card.x+10+d*14,card.y+100,4,0,Math.PI*2);
+      ctx.fill();
     }
-    ctx.textAlign='left';
+    ctx.fillStyle='rgba(120,120,140,0.5)';
+    ctx.font='6px "Press Start 2P"';
+    ctx.fillText('2 LEVELS', card.x+70, card.y+103);
+
+    // Play button hint
+    if(hov){
+      const btnX=card.x+card.w-70, btnY=card.y+card.h-24;
+      ctx.fillStyle=wm.color+'22';
+      ctx.fillRect(btnX,btnY,60,16);
+      ctx.strokeStyle=wm.color;
+      ctx.lineWidth=1; ctx.strokeRect(btnX,btnY,60,16);
+      ctx.fillStyle=wm.color;
+      ctx.font='6px "Press Start 2P"';
+      ctx.textAlign='center';
+      ctx.fillText('▶ PLAY',btnX+30,btnY+11);
+      ctx.textAlign='left';
+    }
   }
 
-  // Footer stats
-  ctx.fillStyle='#2a2a2a';
+  // Footer
+  ctx.fillStyle='rgba(60,60,80,0.7)';
   ctx.font='7px "Press Start 2P"';
   ctx.textAlign='center';
-  ctx.fillText('DEATHS: '+deaths+'   TOTAL COINS: '+totalCoins, W/2, H-8);
+  ctx.fillText('DEATHS: '+deaths+'   ·   COINS: '+totalCoins, W/2, H-8);
   ctx.textAlign='left';
 
-  // Handle clicks on cards
+  drawCRT();
+
+  // Click handling
   if(mouseClicked){
     for(const card of CARDS){
       if(mouseX>=card.x&&mouseX<=card.x+card.w&&mouseY>=card.y&&mouseY<=card.y+card.h){
         startWorld(card.wi);
       }
     }
+  }
+}
+
+// ── MINI ANIMATED WORLD PREVIEW ──────────────────────────────
+function drawMiniScene(x,y,w,h,worldId){
+  const bg={land:['#5c94fc','#a8d8ff'],sea:['#001a4d','#003399'],mine:['#0d0700','#1a0e00'],space:['#000008','#000520']};
+  const [c1,c2]=bg[worldId];
+  const g=ctx.createLinearGradient(x,y,x,y+h);
+  g.addColorStop(0,c1); g.addColorStop(1,c2);
+  ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+
+  if(worldId==='land'){
+    // Ground
+    ctx.fillStyle='#44aa22'; ctx.fillRect(x,y+h-12,w,4);
+    ctx.fillStyle='#5a3000'; ctx.fillRect(x,y+h-8,w,8);
+    // Platform
+    ctx.fillStyle='#5a3000'; ctx.fillRect(x+30,y+h-28,30,4);
+    ctx.fillStyle='#44aa22'; ctx.fillRect(x+30,y+h-28,30,2);
+    // Mini player
+    const mx=x+10+(frame%60)*0.4;
+    ctx.fillStyle='#cc0000'; ctx.fillRect(mx,y+h-22,6,3);
+    ctx.fillStyle='#ffcc99'; ctx.fillRect(mx,y+h-19,6,4);
+    ctx.fillStyle='#0033cc'; ctx.fillRect(mx,y+h-15,6,3);
+    // Coin sparkle
+    ctx.fillStyle='#FFD700'; ctx.beginPath(); ctx.arc(x+50,y+h-32+Math.sin(frame*.1)*2,3,0,Math.PI*2); ctx.fill();
+  }
+  if(worldId==='sea'){
+    // Bubbles
+    for(let i=0;i<5;i++){
+      const bx=x+8+i*14, by=y+h-5-((i*17+frame*0.5)%h);
+      ctx.fillStyle='rgba(100,200,255,0.4)';
+      ctx.beginPath(); ctx.arc(bx,by,2,0,Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle='#002855'; ctx.fillRect(x,y+h-8,w,8);
+    ctx.fillStyle='#0055aa'; ctx.fillRect(x,y+h-8,w,2);
+    // Fish
+    const fx=x+(frame%80);
+    ctx.fillStyle='#ff6600'; ctx.fillRect(fx%w+x,y+h-22,8,5);
+  }
+  if(worldId==='mine'){
+    ctx.fillStyle='#2e1500'; ctx.fillRect(x,y+h-8,w,8);
+    // Gold sparkles
+    for(let i=0;i<4;i++){
+      const gx=x+8+i*18, gy=y+h-5;
+      if(Math.floor(frame/8+i)%3===0){
+        ctx.fillStyle='rgba(255,200,0,0.7)';
+        ctx.fillRect(gx,gy-2,2,4); ctx.fillRect(gx-2,gy,4,2);
+      }
+    }
+    // Bat flying
+    const bx=x+(frame%70); const by2=y+10+Math.sin(frame*.08)*6;
+    ctx.fillStyle='#330044';
+    ctx.fillRect(bx%w+x,by2,6,4);
+    ctx.fillRect((bx-8)%w+x,by2+1,7,2);
+    ctx.fillRect((bx+6)%w+x,by2+1,7,2);
+  }
+  if(worldId==='space'){
+    // Stars
+    for(let i=0;i<12;i++){
+      const blink=Math.sin(frame*.06+i*1.3)>0.3;
+      ctx.fillStyle=blink?'#fff':'rgba(150,150,255,0.4)';
+      ctx.fillRect(x+i*7,y+i*4%h,blink?2:1,blink?2:1);
+    }
+    ctx.fillStyle='#12123a'; ctx.fillRect(x,y+h-8,w,8);
+    // Alien
+    const ax=x+(frame%70);
+    ctx.fillStyle='#009900'; ctx.fillRect(ax%w+x,y+h-20,7,6);
+    ctx.fillStyle='#00ee00'; ctx.fillRect((ax)%w+x+1,y+h-22,5,3);
   }
 }
 
@@ -1363,24 +1715,49 @@ function drawParticles(){
   ctx.globalAlpha=1;
 }
 
-// ── IN-GAME OVERLAY (level name + world tip) ─────────────────
+// ── IN-GAME OVERLAY (level name + progress bar + tips) ───────
 function drawOverlay(){
-  ctx.fillStyle='rgba(255,255,255,0.14)';
-  ctx.font='bold 9px Courier New';
+  // Level name pill
+  const wm=curWorld||WORLDS[0];
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.roundRect(6,6,200,18,4); ctx.fill();
+  ctx.fillStyle=wm.color;
+  ctx.font='bold 7px "Press Start 2P"';
   ctx.textAlign='left';
-  ctx.fillText(LV.name, 8, 16);
+  ctx.fillText(LV.name,10,18);
 
-  const tips={
-    sea:  'FLOATY JUMP — time it carefully',
-    space:'LOW GRAVITY — hang in the air',
-    mine: 'WATCH the ceiling for bats!',
-    land: '',
-  };
-  if(tips[LV.wt]){
-    ctx.fillStyle='rgba(200,200,255,0.13)';
-    ctx.font='7px Courier New';
-    ctx.fillText(tips[LV.wt], 8, 28);
+  // Progress bar (how far through the level)
+  const prog=Math.min(1,camX/(LV.width-W));
+  const barW=120, barX=W-barW-8, barY=10;
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.fillRect(barX,barY,barW,6);
+  const pg=ctx.createLinearGradient(barX,0,barX+barW,0);
+  pg.addColorStop(0,wm.color);
+  pg.addColorStop(1,wm.color+'88');
+  ctx.fillStyle=pg;
+  ctx.fillRect(barX,barY,barW*prog,6);
+  // Flag icon at end
+  ctx.fillStyle=wm.color+'aa';
+  ctx.font='10px serif';
+  ctx.textAlign='left';
+  ctx.fillText('⚑',barX+barW+2,barY+8);
+
+  // World tip (fades after 4 seconds)
+  if(frame<240){
+    const alpha=Math.min(1,(240-frame)/60);
+    const tips={sea:'FLOATY JUMP — time it carefully',space:'LOW GRAVITY — hang time is longer',mine:'WATCH the ceiling for bats!',land:''};
+    if(tips[LV.wt]){
+      ctx.globalAlpha=alpha*0.55;
+      ctx.fillStyle='rgba(0,0,0,0.6)';
+      ctx.fillRect(0,H-24,W,24);
+      ctx.fillStyle='#fff';
+      ctx.font='7px "Press Start 2P"';
+      ctx.textAlign='center';
+      ctx.fillText(tips[LV.wt],W/2,H-10);
+      ctx.globalAlpha=1;
+    }
   }
+  ctx.textAlign='left';
 }
 
 // ── MAIN RENDER ──────────────────────────────────────────────
@@ -1389,9 +1766,12 @@ function render(){
 
   if(gameState==='worldSelect'){
     drawWorldSelect();
+    drawFlash();
+    drawCRT();
     return;
   }
 
+  const shaking=applyShake();
   drawBG();
   for(const p of LV.sol)    drawSolid(p);
   for(const p of movPlats)  drawMovPlat(p);
@@ -1405,6 +1785,21 @@ function render(){
   drawPlayer();
   drawParticles();
   drawOverlay();
+  if(shaking) ctx.restore();
+  drawFlash();
+  drawCRT();
+}
+
+// ── CRT SCANLINES ────────────────────────────────────────────
+function drawCRT(){
+  // Subtle scanlines
+  ctx.fillStyle='rgba(0,0,0,0.06)';
+  for(let y=0;y<H;y+=3) ctx.fillRect(0,y,W,1);
+  // Vignette
+  const vg=ctx.createRadialGradient(W/2,H/2,H*0.28,W/2,H/2,H*0.85);
+  vg.addColorStop(0,'transparent');
+  vg.addColorStop(1,'rgba(0,0,0,0.38)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
 }
 
 // ── GAME LOOP ────────────────────────────────────────────────
