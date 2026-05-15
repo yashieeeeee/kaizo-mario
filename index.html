@@ -218,7 +218,8 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;}
     <div class="ovl-divider"></div>
     <div class="ovl-btns">
       <button class="ovl-btn btn-retry" id="restartBtn" onclick="onRestart()">▶ TRY AGAIN</button>
-      <button class="ovl-btn btn-menu"  id="menuBtn"   onclick="goWorldSelect()">⌂ WORLDS</button>
+      <button class="ovl-btn btn-menu"  id="menuBtn"   onclick="goLevelSelect()">☰ LEVELS</button>
+      <button class="ovl-btn btn-menu"  id="worldBtn"  onclick="goWorldSelect()" style="color:#aaa;border-color:#aaa">⌂ WORLDS</button>
     </div>
   </div>
 </div>
@@ -287,7 +288,10 @@ document.addEventListener('keydown',e=>{
   if(['ArrowLeft','ArrowRight','ArrowUp',' ','z','Z','r','R','Escape'].includes(e.key))e.preventDefault();
   if(e.key==='ArrowUp'||e.key===' '||e.key==='z'||e.key==='Z'){jumpFresh=true;}
   if(e.key==='r'||e.key==='R')onRestart();
-  if(e.key==='Escape')goWorldSelect();
+  if(e.key==='Escape'){
+    if(gameState==='playing'||gameState==='dead') goLevelSelect();
+    else if(gameState==='levelSelect') goWorldSelect();
+  }
 });
 document.addEventListener('keyup',e=>{K[e.key]=false;});
 
@@ -713,7 +717,32 @@ let camX=0, frame=0, timer=300, timerTick=0;
 let particles=[];
 let lvlIdx=0, LV, player, movPlats, coinSt, invSt, enSt;
 let curWorld=null;
+let selectedWorldIdx=0; // which world is shown in level select
 const MAXFALL=14, SPD=3.2;
+
+// ── UNLOCK SYSTEM ────────────────────────────────────────────
+// Stored as a Set of level indices that are playable
+let unlockedLevels=new Set([0]); // level 0 (Land 1-1) always unlocked
+
+function saveUnlocks(){
+  try{ localStorage.setItem('kaizoUnlocked',JSON.stringify([...unlockedLevels])); }catch(e){}
+}
+function loadUnlocks(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('kaizoUnlocked')||'[]');
+    saved.forEach(i=>unlockedLevels.add(i));
+  }catch(e){}
+}
+loadUnlocks();
+
+function unlockLevel(i){
+  if(i<LEVELS.length && !unlockedLevels.has(i)){
+    unlockedLevels.add(i);
+    saveUnlocks();
+  }
+}
+// A world is accessible if its first level is unlocked
+function worldUnlocked(wi){ return unlockedLevels.has(WORLDS[wi].lr[0]); }
 
 // ── HUD REFS ─────────────────────────────────────────────────
 const hLv=document.getElementById('hLv'),hD=document.getElementById('hD');
@@ -797,7 +826,12 @@ function initLevel(i){
     jumpHeld:false,
     jumpFrames:0,
     dead:false,
-    deadTimer:0
+    deadTimer:0,
+    // Sea mechanic
+    airJumps:0,       // how many swim jumps used in air
+    // Space mechanic
+    touchingWall:0,   // -1=left wall, 1=right wall, 0=none
+    wallJumpCooldown:0,
   };
 
   camX=0; frame=0; timer=300; timerTick=0; particles=[];
@@ -820,8 +854,30 @@ function goWorldSelect(){
   document.getElementById('hud').style.borderBottomColor='';
 }
 
+function goLevelSelect(){
+  if(!curWorld) return;
+  selectedWorldIdx=WORLDS.indexOf(curWorld);
+  gameState='levelSelect';
+  overlay.classList.remove('show');
+}
+
 function onRestart(){ initLevel(lvlIdx); }
-function startWorld(wi){ curWorld=WORLDS[wi]; initLevel(curWorld.lr[0]); }
+
+// Go to level select for a world (called when clicking a world card)
+function startWorld(wi){
+  if(!worldUnlocked(wi)) return; // locked world — do nothing
+  selectedWorldIdx=wi;
+  curWorld=WORLDS[wi];
+  gameState='levelSelect';
+  overlay.classList.remove('show');
+}
+
+// Actually start playing a specific level
+function playLevel(i){
+  if(!unlockedLevels.has(i)) return;
+  curWorld=WORLDS.find(w=>i>=w.lr[0]&&i<=w.lr[1]);
+  initLevel(i);
+}
 
 // ── SHOW OVERLAY ─────────────────────────────────────────────
 function showOverlay(title, sub, isWin){
@@ -966,27 +1022,51 @@ function updPlayer(){
     player.vy=LV.jf;
     player.jumpHeld=true;
     player.jumpFrames=0;
+    player.airJumps=0; // reset swim jumps
+    sndJump();
+  }
+
+  // ─ SEA: Swim — one extra jump in the air ─
+  else if(freshJump && !player.onGround && LV.wt==='sea' && player.airJumps<1){
+    player.vy=LV.jf*0.72; // weaker than ground jump
+    player.airJumps++;
+    player.jumpHeld=false;
+    // spawn bubble burst
+    for(let b=0;b<6;b++) spawnP(player.x+9,player.y+player.h,'#88ddff',1);
+    sndJump();
+  }
+
+  // ─ SPACE: Wall Jump ─
+  else if(freshJump && !player.onGround && LV.wt==='space' && player.touchingWall!==0 && player.wallJumpCooldown<=0){
+    player.vy=LV.jf*0.9;
+    player.vx=-player.touchingWall*SPD*1.4; // kick away from wall
+    player.jumpHeld=false;
+    player.wallJumpCooldown=18;
+    for(let b=0;b<5;b++) spawnP(player.x+9,player.y+10,'#bb88ff',1);
     sndJump();
   }
 
   // ─ Jump HOLD boost — LIMITED to MAX_JUMP_FRAMES ─
   if(player.jumpHeld && holdingJump && player.vy<0 && player.jumpFrames<MAX_JUMP_FRAMES){
-    player.vy-=0.6;       // small upward nudge each frame
+    player.vy-=0.6;
     player.jumpFrames++;
   }
-  if(!holdingJump) player.jumpHeld=false;  // release early = shorter jump
+  if(!holdingJump) player.jumpHeld=false;
+
+  if(player.wallJumpCooldown>0) player.wallJumpCooldown--;
 
   // ─ Gravity ─
   player.vy+=LV.grav;
   if(player.vy>MAXFALL) player.vy=MAXFALL;
 
   // ─ X movement + horizontal collision ─
+  player.touchingWall=0; // reset each frame
   player.x+=player.vx;
   player.x=Math.max(0, Math.min(LV.width-player.w, player.x));
   for(const p of allSolids()){
     if(overlap(player.x,player.y,player.w,player.h, p.x,p.y,p.w,p.h)){
-      if(player.vx>0) player.x=p.x-player.w;
-      else            player.x=p.x+p.w;
+      if(player.vx>0){ player.x=p.x-player.w; player.touchingWall=1; }
+      else            { player.x=p.x+p.w;      player.touchingWall=-1; }
       player.vx=0;
     }
   }
@@ -1029,6 +1109,7 @@ function updPlayer(){
         player.vy=0;
         player.onGround=true;
         player.jumpHeld=false;
+        player.airJumps=0; // restore swim jump
         if(p.dx!==undefined) player.x+=p.dx; // ride platform
       } else if(player.vy<0){
         player.y=p.y+p.h;
@@ -1065,12 +1146,17 @@ function updPlayer(){
   // ─ Goal flag ─
   if(overlap(player.x,player.y,player.w,player.h, LV.gx,LV.gy,30,H-LV.gy)){
     if(lvlIdx<curWorld.lr[1]){
+      // Unlock next level
+      unlockLevel(lvlIdx+1);
       sndClear();
       triggerFlash('#00ff88',0.35);
-      showOverlay('LEVEL CLEAR!','Get ready for level '+((lvlIdx-curWorld.lr[0])+2)+'!',true);
+      showOverlay('LEVEL CLEAR!','Level '+(lvlIdx-curWorld.lr[0]+2)+' unlocked!',true);
       gameState='win';
       setTimeout(()=>initLevel(lvlIdx+1), 2200);
     } else {
+      // Unlock first level of next world
+      const nextWi=WORLDS.findIndex(w=>w===curWorld)+1;
+      if(nextWi<WORLDS.length) unlockLevel(WORLDS[nextWi].lr[0]);
       sndClear(); sndClear();
       triggerFlash('#FFD700',0.5);
       showOverlay(curWorld.name+' CLEAR!','You legend! Deaths: '+deaths,true);
@@ -1078,8 +1164,159 @@ function updPlayer(){
     }
   }
 
+  // ─ Space wall-slide visual ─
+  if(LV.wt==='space' && player.touchingWall!==0 && !player.onGround && player.vy>0){
+    player.vy*=0.88; // slow fall when touching wall
+    if(frame%5===0) spawnP(
+      player.x+(player.touchingWall>0?player.w:0),
+      player.y+player.h/2,
+      '#bb88ff',1
+    );
+  }
+
   // ─ Camera ─
   camX=Math.max(0, Math.min(LV.width-W, player.x-W/3));
+}
+
+// ── LEVEL SELECT SCREEN ──────────────────────────────────────
+function drawLevelSelect(){
+  const wm=WORLDS[selectedWorldIdx];
+
+  // Background
+  ctx.fillStyle='#00001a'; ctx.fillRect(0,0,W,H);
+  for(let i=0;i<80;i++){
+    const sx=(i*139+50)%W, sy=(i*97+20)%H;
+    const b=Math.sin(frame*0.04+i*0.7)>0.4;
+    ctx.fillStyle=`rgba(180,180,255,${b?0.7:0.15})`;
+    ctx.fillRect(sx,sy,b?2:1,b?2:1);
+  }
+
+  // Back button
+  const backHov=mouseX<90&&mouseY<32;
+  ctx.fillStyle=backHov?'#ffffff18':'#ffffff08';
+  ctx.fillRect(0,0,90,28);
+  ctx.strokeStyle=backHov?'#ffffff44':'#ffffff18';
+  ctx.lineWidth=1; ctx.strokeRect(0,0,90,28);
+  ctx.fillStyle=backHov?'#fff':'#666';
+  ctx.font='7px "Press Start 2P"'; ctx.textAlign='left';
+  ctx.fillText('◀ WORLDS',8,18);
+
+  // World title
+  ctx.textAlign='center';
+  ctx.fillStyle=wm.color;
+  ctx.font='bold 16px "Press Start 2P"';
+  ctx.shadowColor=wm.color; ctx.shadowBlur=16;
+  ctx.fillText(wm.emoji+' '+wm.name,W/2,55);
+  ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(180,180,200,0.4)';
+  ctx.font='7px "Press Start 2P"';
+  ctx.fillText(wm.sub,W/2,72);
+
+  // Mechanic badge
+  const mechanic={land:'CLASSIC PLATFORMER',sea:'🫧 SWIM IN AIR',mine:'🔦 FLASHLIGHT DARK',space:'🌀 WALL JUMP'};
+  ctx.fillStyle=wm.color+'aa';
+  ctx.font='6px "Press Start 2P"';
+  ctx.fillText('SPECIAL: '+mechanic[wm.id],W/2,90);
+
+  // Level cards — side by side
+  const levels=[wm.lr[0], wm.lr[1]];
+  const cardW=220, cardH=160, gap=20;
+  const totalW=cardW*2+gap;
+  const startX=(W-totalW)/2;
+
+  levels.forEach((li,pos)=>{
+    const lv=LEVELS[li];
+    const unlocked=unlockedLevels.has(li);
+    const cx=startX+pos*(cardW+gap), cy=110;
+    const hov=unlocked&&mouseX>=cx&&mouseX<=cx+cardW&&mouseY>=cy&&mouseY<=cy+cardH;
+
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(cx+4,cy+4,cardW,cardH);
+
+    // Card bg
+    const cg=ctx.createLinearGradient(cx,cy,cx,cy+cardH);
+    cg.addColorStop(0,hov?wm.dark+'ff':'#0d0d1a');
+    cg.addColorStop(1,'#06060d');
+    ctx.fillStyle=cg; ctx.fillRect(cx,cy,cardW,cardH);
+
+    // Top bar
+    const bg=ctx.createLinearGradient(cx,cy,cx+cardW,cy);
+    bg.addColorStop(0,unlocked?wm.color:'#333');
+    bg.addColorStop(1,unlocked?wm.color+'55':'#222');
+    ctx.fillStyle=bg; ctx.fillRect(cx,cy,cardW,4);
+
+    // Border
+    ctx.lineWidth=hov?2:1;
+    ctx.strokeStyle=unlocked?(hov?wm.color:wm.color+'44'):'#222';
+    if(hov){ctx.shadowColor=wm.color; ctx.shadowBlur=12;}
+    ctx.strokeRect(cx,cy,cardW,cardH);
+    ctx.shadowBlur=0;
+
+    // Mini animated scene preview
+    ctx.save();
+    ctx.beginPath(); ctx.rect(cx+8,cy+10,cardW-16,70); ctx.clip();
+    drawMiniScene(cx+8,cy+10,cardW-16,70,wm.id);
+    ctx.restore();
+    // Scene border
+    ctx.strokeStyle=unlocked?wm.color+'33':'#1a1a1a';
+    ctx.lineWidth=1; ctx.strokeRect(cx+8,cy+10,cardW-16,70);
+
+    if(!unlocked){
+      // Dark overlay on scene
+      ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(cx+8,cy+10,cardW-16,70);
+      ctx.font='20px serif'; ctx.textAlign='center';
+      ctx.fillText('🔒',cx+cardW/2,cy+50);
+    }
+
+    // Level number
+    ctx.textAlign='left';
+    ctx.fillStyle=unlocked?wm.color:'#333';
+    ctx.font='bold 9px "Press Start 2P"';
+    ctx.fillText('LEVEL '+(pos+1),cx+10,cy+96);
+
+    // Level name
+    ctx.fillStyle=unlocked?'rgba(180,180,200,0.7)':'#2a2a2a';
+    ctx.font='6px "Press Start 2P"';
+    const shortName=lv.name.split('  ')[1]||'';
+    ctx.fillText(shortName,cx+10,cy+110);
+
+    if(unlocked){
+      // Play button
+      const btnY=cy+cardH-26;
+      ctx.fillStyle=hov?wm.color+'33':'#ffffff08';
+      ctx.fillRect(cx+8,btnY,cardW-16,20);
+      ctx.strokeStyle=hov?wm.color:wm.color+'44';
+      ctx.lineWidth=1; ctx.strokeRect(cx+8,btnY,cardW-16,20);
+      ctx.fillStyle=hov?wm.color:'#888';
+      ctx.font='7px "Press Start 2P"'; ctx.textAlign='center';
+      ctx.fillText('▶ PLAY',cx+cardW/2,btnY+13);
+    } else {
+      ctx.fillStyle='#333'; ctx.font='6px "Press Start 2P"'; ctx.textAlign='center';
+      ctx.fillText('COMPLETE LV '+(pos)+' FIRST',cx+cardW/2,cy+cardH-14);
+    }
+    ctx.textAlign='left';
+  });
+
+  // Footer
+  ctx.fillStyle='rgba(60,60,80,0.6)';
+  ctx.font='7px "Press Start 2P"'; ctx.textAlign='center';
+  ctx.fillText('DEATHS: '+deaths+'   ·   COINS: '+totalCoins,W/2,H-8);
+  ctx.textAlign='left';
+
+  drawCRT();
+
+  // Click handling
+  if(mouseClicked){
+    // Back button
+    if(mouseX<90&&mouseY<32){ gameState='worldSelect'; mouseClicked=false; return; }
+    // Level cards
+    levels.forEach((li,pos)=>{
+      const cx=startX+pos*(cardW+gap), cy=110;
+      if(mouseX>=cx&&mouseX<=cx+cardW&&mouseY>=cy&&mouseY<=cy+cardH){
+        playLevel(li);
+      }
+    });
+  }
 }
 
 // ── WORLD SELECT SCREEN ──────────────────────────────────────
@@ -1132,7 +1369,8 @@ function drawWorldSelect(){
   // Cards
   for(const card of CARDS){
     const wm=WORLDS[card.wi];
-    const hov=mouseX>=card.x&&mouseX<=card.x+card.w&&mouseY>=card.y&&mouseY<=card.y+card.h;
+    const hov=worldUnlocked(card.wi)&&mouseX>=card.x&&mouseX<=card.x+card.w&&mouseY>=card.y&&mouseY<=card.y+card.h;
+    const locked=!worldUnlocked(card.wi);
     const pulse=Math.sin(frame*0.05+card.wi*1.2)*0.5+0.5;
 
     // Card shadow
@@ -1168,52 +1406,71 @@ function drawWorldSelect(){
     ctx.strokeRect(card.x,card.y,card.w,card.h);
     ctx.shadowBlur=0;
 
-    // Mini animated scene in top-right corner of card
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(card.x+card.w-84,card.y+barH,80,60);
-    ctx.clip();
-    drawMiniScene(card.x+card.w-84,card.y+barH,80,60,wm.id);
-    ctx.restore();
-
-    // Emoji + Name
-    ctx.font='20px serif'; ctx.textAlign='left';
-    ctx.fillText(wm.emoji, card.x+10, card.y+36);
-
-    ctx.fillStyle=wm.color;
-    ctx.font='bold 9px "Press Start 2P"';
-    ctx.shadowColor=wm.color; ctx.shadowBlur=hov?8:0;
-    ctx.fillText(wm.name, card.x+10, card.y+60);
-    ctx.shadowBlur=0;
-
-    ctx.fillStyle='rgba(160,160,180,0.6)';
-    ctx.font='6px "Press Start 2P"';
-    ctx.fillText(wm.sub, card.x+10, card.y+76);
-
-    // Difficulty dots
-    const filled=wm.diff.split('★').length-1;
-    for(let d=0;d<4;d++){
-      ctx.fillStyle=d<filled ? wm.color : wm.color+'33';
-      ctx.beginPath();
-      ctx.arc(card.x+10+d*14,card.y+100,4,0,Math.PI*2);
-      ctx.fill();
-    }
-    ctx.fillStyle='rgba(120,120,140,0.5)';
-    ctx.font='6px "Press Start 2P"';
-    ctx.fillText('2 LEVELS', card.x+70, card.y+103);
-
-    // Play button hint
-    if(hov){
-      const btnX=card.x+card.w-70, btnY=card.y+card.h-24;
-      ctx.fillStyle=wm.color+'22';
-      ctx.fillRect(btnX,btnY,60,16);
-      ctx.strokeStyle=wm.color;
-      ctx.lineWidth=1; ctx.strokeRect(btnX,btnY,60,16);
-      ctx.fillStyle=wm.color;
-      ctx.font='6px "Press Start 2P"';
-      ctx.textAlign='center';
-      ctx.fillText('▶ PLAY',btnX+30,btnY+11);
+    if(locked){
+      // Dark overlay on locked card
+      ctx.fillStyle='rgba(0,0,0,0.75)';
+      ctx.fillRect(card.x,card.y,card.w,card.h);
+      // Lock icon
+      ctx.font='30px serif'; ctx.textAlign='center';
+      ctx.fillText('🔒', card.x+card.w/2, card.y+card.h/2-6);
+      // Dim name
+      ctx.fillStyle='#2a2a2a';
+      ctx.font='bold 8px "Press Start 2P"';
+      ctx.fillText(wm.name, card.x+card.w/2, card.y+card.h/2+20);
+      // Hint text
+      ctx.fillStyle='#1e1e1e';
+      ctx.font='5px "Press Start 2P"';
+      const prevName=card.wi>0?WORLDS[card.wi-1].name:'???';
+      ctx.fillText('CLEAR '+prevName+' FIRST', card.x+card.w/2, card.y+card.h/2+36);
       ctx.textAlign='left';
+    } else {
+      // Mini animated scene in top-right corner of card
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(card.x+card.w-84,card.y+barH,80,60);
+      ctx.clip();
+      drawMiniScene(card.x+card.w-84,card.y+barH,80,60,wm.id);
+      ctx.restore();
+
+      // Emoji + Name
+      ctx.font='20px serif'; ctx.textAlign='left';
+      ctx.fillText(wm.emoji, card.x+10, card.y+36);
+
+      ctx.fillStyle=wm.color;
+      ctx.font='bold 9px "Press Start 2P"';
+      ctx.shadowColor=wm.color; ctx.shadowBlur=hov?8:0;
+      ctx.fillText(wm.name, card.x+10, card.y+60);
+      ctx.shadowBlur=0;
+
+      ctx.fillStyle='rgba(160,160,180,0.6)';
+      ctx.font='6px "Press Start 2P"';
+      ctx.fillText(wm.sub, card.x+10, card.y+76);
+
+      // Difficulty dots
+      const filled=wm.diff.split('★').length-1;
+      for(let d=0;d<4;d++){
+        ctx.fillStyle=d<filled ? wm.color : wm.color+'33';
+        ctx.beginPath();
+        ctx.arc(card.x+10+d*14,card.y+100,4,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.fillStyle='rgba(120,120,140,0.5)';
+      ctx.font='6px "Press Start 2P"';
+      ctx.fillText('2 LEVELS', card.x+70, card.y+103);
+
+      // Enter hint on hover
+      if(hov){
+        const btnX=card.x+card.w-70, btnY=card.y+card.h-24;
+        ctx.fillStyle=wm.color+'22';
+        ctx.fillRect(btnX,btnY,60,16);
+        ctx.strokeStyle=wm.color;
+        ctx.lineWidth=1; ctx.strokeRect(btnX,btnY,60,16);
+        ctx.fillStyle=wm.color;
+        ctx.font='6px "Press Start 2P"';
+        ctx.textAlign='center';
+        ctx.fillText('▶ SELECT',btnX+30,btnY+11);
+        ctx.textAlign='left';
+      }
     }
   }
 
@@ -1742,7 +1999,23 @@ function drawOverlay(){
   ctx.textAlign='left';
   ctx.fillText('⚑',barX+barW+2,barY+8);
 
-  // World tip (fades after 4 seconds)
+  // Mechanic badge (top right, only first 300 frames)
+  if(frame<300){
+    const badges={sea:'🫧 PRESS JUMP IN AIR TO SWIM',space:'🌀 PRESS JUMP ON WALL',mine:'🔦 FLASHLIGHT MODE',land:''};
+    if(badges[LV.wt]){
+      const alpha=Math.min(1,(300-frame)/80);
+      ctx.globalAlpha=alpha;
+      ctx.fillStyle='rgba(0,0,0,0.55)';
+      ctx.beginPath(); ctx.roundRect(W/2-130,6,260,18,4); ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.font='6px "Press Start 2P"';
+      ctx.textAlign='center';
+      ctx.fillText(badges[LV.wt],W/2,18);
+      ctx.globalAlpha=1;
+    }
+  }
+
+  // World tip bottom bar (fades after 4 seconds)
   if(frame<240){
     const alpha=Math.min(1,(240-frame)/60);
     const tips={sea:'FLOATY JUMP — time it carefully',space:'LOW GRAVITY — hang time is longer',mine:'WATCH the ceiling for bats!',land:''};
@@ -1771,6 +2044,12 @@ function render(){
     return;
   }
 
+  if(gameState==='levelSelect'){
+    drawLevelSelect();
+    drawFlash();
+    return;
+  }
+
   const shaking=applyShake();
   drawBG();
   for(const p of LV.sol)    drawSolid(p);
@@ -1786,6 +2065,27 @@ function render(){
   drawParticles();
   drawOverlay();
   if(shaking) ctx.restore();
+
+  // ─ Mine: Darkness + flashlight around player ─
+  if(LV&&LV.wt==='mine'){
+    const px=player.x-camX+9, py=player.y+11;
+    const flicker=0.92+Math.sin(frame*0.4)*0.05+Math.sin(frame*1.3)*0.03;
+    const radius=90*flicker;
+    // Dark overlay with transparent hole
+    const dark=ctx.createRadialGradient(px,py,radius*0.35,px,py,radius);
+    dark.addColorStop(0,'rgba(0,0,0,0)');
+    dark.addColorStop(0.6,'rgba(0,0,0,0.55)');
+    dark.addColorStop(1,'rgba(0,0,0,0.97)');
+    ctx.fillStyle=dark;
+    ctx.fillRect(0,0,W,H);
+    // Warm torch tint near player
+    const torch=ctx.createRadialGradient(px,py,0,px,py,radius*0.5);
+    torch.addColorStop(0,'rgba(255,140,0,0.08)');
+    torch.addColorStop(1,'rgba(255,140,0,0)');
+    ctx.fillStyle=torch;
+    ctx.fillRect(0,0,W,H);
+  }
+
   drawFlash();
   drawCRT();
 }
